@@ -1,0 +1,67 @@
+---
+- hosts: default
+  gather_facts: no
+  become: yes
+  become_method: sudo
+  tasks:
+  - name: Installing packages
+    apt:
+     name: "{{ item }}"
+     state: present
+    with_items:
+    - git
+    - python-pip
+
+  - name: Installing modules using pip
+    pip:
+     name: "{{ item }}"
+     state: present
+    with_items:
+    - flask
+    - werkzeug
+
+#  - name: create a directory /webapps/devops
+#    shell: mkdir -p /webapps/devops && setfacl -m u:vagrant:rwx /webapps/devops
+
+  - name: Creating a directory /webapps/devops
+    file:
+     path: /webapps/devops
+     state: directory
+     owner: vagrant
+     group: vagrant
+
+  - name: Clone the repository into /webapps/devops/
+    git:
+     dest: /webapps/devops/
+     repo: https://bitbucket.org/azneita/devops-challenge.git
+
+  - name: Downloading self healing script from my repo into /webapps/devops/
+    get_url:
+     dest: /webapps/devops/process_self_healing_script.sh
+     url: https://raw.githubusercontent.com/skumar0710/scripts/master/process_self_healing_script.sh
+
+  - name: Running the application app.py
+    shell: nohup /usr/bin/python /webapps/devops/app.py &
+    become_user: vagrant
+
+  - name: Adding the self healing script into cron job
+    cron:
+     name: "Monitoring Application App.py"
+     minute: "*/1"
+     job: "sh /webapps/devops/process_self_healing_script.sh"
+     user: vagrant
+
+  - name: Setting Timezone to UTC
+    timezone:
+     name: UTC
+
+  - name: Log rotate for application status log
+    shell: 
+     cmd: |
+       cat >> /etc/logrotate.d/app_status <<EOF
+       /webapps/devops/app_status_logs {
+       rotate 7
+       daily
+       compress
+       }
+       EOF
